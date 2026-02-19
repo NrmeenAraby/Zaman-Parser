@@ -1,0 +1,519 @@
+import java.time.*
+import java.time.temporal.TemporalAdjusters
+import java.util.*
+
+data class TemporalResult(
+    val startDate: LocalDate,
+    val endDate: LocalDate? = null,
+    val isRecurring: Boolean = false
+)
+
+object TemporalParser {
+
+    private val today: LocalDate
+        get() = LocalDate.now()
+
+    // =====================================================
+    // ENTRY
+    // =====================================================
+    fun parse(input: String): TemporalResult? {
+
+        val text = normalizeArabic(input.trim())
+
+        parseRange(text)?.let { return it }
+        parseRecurring(text)?.let { return it }
+        parseFlexibleDate(text)?.let { return it }
+      //  parseAbsoluteMonthName(text)?.let { return it }
+        parseMonthOrWeekRelative(text)?.let { return it }
+        parseMonthWeekBoundary(text)?.let { return it }
+        parseWeekday(text)?.let { return it }
+        parseRelativeNumeric(text)?.let { return it }
+        parseSingleDay(text)?.let { return it }
+
+        return null
+    }
+
+    // =====================================================
+    // NORMALIZE ARABIC TEXT
+    // =====================================================
+    private fun normalizeArabic(text: String): String {
+        return text
+            // Normalize digits
+            .replace("٠","0").replace("١","1").replace("٢","2").replace("٣","3")
+            .replace("٤","4").replace("٥","5").replace("٦","6").replace("٧","7")
+            .replace("٨","8").replace("٩","9")
+            // Normalize alef variations
+            .replace("[أإآ]".toRegex(), "ا")
+            // Normalize ta marbuta
+            .replace("ة", "ه")
+            // Remove tashkeel (diacritics)
+            .replace("[ًٌٍَُِْ]".toRegex(), "")
+    }
+
+    // =====================================================
+    // FLEXIBLE DATE
+    // =====================================================
+    private fun parseFlexibleDate(text: String): TemporalResult? {
+
+        // ───────────────────────────────────────────────────────────────
+        // 1. Try numeric formats: dd/mm, mm/dd, yyyy-mm-dd, dd/mm/yyyy etc.
+        // ───────────────────────────────────────────────────────────────
+        val numericRegex = Regex("""\b(\d{1,4})[-/\\.](\d{1,2})(?:[-/\\.](\d{1,4}))?\b""")
+        numericRegex.find(text)?.let { match ->
+            val p1 = match.groupValues[1]
+            val p2 = match.groupValues[2]
+            val p3 = match.groupValues.getOrNull(3)
+
+            try {
+                val date = when {
+                    p3.isNullOrBlank() -> {
+                        // assume dd/mm or mm/dd → prefer future date
+                        val day = p1.toInt()
+                        val month = p2.toInt()
+                        var d = LocalDate.of(today.year, month, day)
+                        if (!d.isAfter(today)) d = d.plusYears(1)
+                        d
+                    }
+                    p1.length == 4 -> LocalDate.of(p1.toInt(), p2.toInt(), p3!!.toInt())
+                    p3.length == 4 -> LocalDate.of(p3.toInt(), p2.toInt(), p1.toInt())
+                    else -> return null
+                }
+                return TemporalResult(date)
+            } catch (_: Exception) {
+                // invalid date (e.g. 30/02) → continue to next parser
+            }
+        }
+
+        // ───────────────────────────────────────────────────────────────
+        // 2. Year - MonthName - Day  (English & Arabic support)
+        // Examples:
+        //   2025-Dec-10
+        //   2025 Dec 10
+        //   10 ديسمبر 2025
+        //   2025-ديسمبر-10
+        // ───────────────────────────────────────────────────────────────
+        val monthNamesEnAr = mapOf(
+            // English (various lengths & cases)
+            "jan" to 1, "january" to 1,
+            "feb" to 2, "february" to 2,
+            "mar" to 3, "march" to 3,
+            "apr" to 4, "april" to 4,
+            "may" to 5,
+            "jun" to 6, "june" to 6,
+            "jul" to 7, "july" to 7,
+            "aug" to 8, "august" to 8,
+            "sep" to 9, "september" to 9,
+            "oct" to 10, "october" to 10,
+            "nov" to 11, "november" to 11,
+            "dec" to 12, "december" to 12,
+
+            // Arabic full & short
+            "يناير" to 1,
+            "فبراير" to 2,
+            "مارس" to 3,
+            "ابريل" to 4,
+            "مايو" to 5,
+            "يونيو" to 6,
+            "يوليو" to 7,
+            "اغسطس" to 8,
+            "سبتمبر" to 9,
+            "اكتوبر" to 10,
+            "نوفمبر" to 11,
+            "ديسمبر" to 12
+        )
+
+        // Flexible separators: space, -, /, .
+        val monthNameRegex = Regex(
+            """\b(\d{4})\s*[-/.\s]+([^\d\s-/]{3,})\s*[-/.\s]+(\d{1,2})\b""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+
+        monthNameRegex.find(text)?.let { match ->
+            val yearStr = match.groupValues[1]
+            val monthStrRaw = match.groupValues[2].lowercase()
+            val dayStr = match.groupValues[3]
+
+            val monthNum = monthNamesEnAr[monthStrRaw]
+                ?: monthNamesEnAr.entries.firstOrNull { monthStrRaw.contains(it.key) }?.value
+
+            if (monthNum != null) {
+                try {
+                    val date = LocalDate.of(yearStr.toInt(), monthNum, dayStr.toInt())
+                    return TemporalResult(date)
+                } catch (_: Exception) {
+                    // invalid day/month → skip
+                }
+            }
+        }
+
+        // Also support reverse order: day month year (very common in Arabic)
+        val dayMonthYearRegex = Regex(
+            """\b(\d{1,2})\s*[-/.\s]+([^\d\s-/]{3,})\s*[-/.\s]+(\d{4})\b""",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+
+        dayMonthYearRegex.find(text)?.let { match ->
+            val dayStr = match.groupValues[1]
+            val monthStrRaw = match.groupValues[2].lowercase()
+            val yearStr = match.groupValues[3]
+
+            val monthNum = monthNamesEnAr[monthStrRaw]
+                ?: monthNamesEnAr.entries.firstOrNull { monthStrRaw.contains(it.key) }?.value
+
+            if (monthNum != null) {
+                try {
+                    val date = LocalDate.of(yearStr.toInt(), monthNum, dayStr.toInt())
+                    return TemporalResult(date)
+                } catch (_: Exception) {
+                    // invalid → skip
+                }
+            }
+        }
+
+        // ───────────────────────────────────────────────────────────────
+        // New pattern: short forms without year and without strict separator
+        // Examples: 25 Dec, 23 يناير, Dec 25, يناير ٢٣, ١٥ أكتوبر
+        // ───────────────────────────────────────────────────────────────
+        val shortMonthDayRegex = Regex(
+            """\b(?:(\d{1,2})\s+)?([a-zA-Z\u0600-\u06FF]{3,})\s*(?:(\d{1,2}))?\b""",
+            setOf(RegexOption.IGNORE_CASE)
+        )
+
+        shortMonthDayRegex.find(text)?.let { match ->
+
+            var dayStr   = match.groupValues.getOrNull(1)?.trim()
+            var monthStr = match.groupValues.getOrNull(2)?.lowercase()?.trim()
+            var dayStr2  = match.groupValues.getOrNull(3)?.trim()
+
+            // Handle both orders
+            if (dayStr.isNullOrBlank() && !dayStr2.isNullOrBlank()) {
+                dayStr = dayStr2
+            }
+
+            if (monthStr.isNullOrBlank() || (dayStr.isNullOrBlank() && dayStr2.isNullOrBlank())) {
+                return@let
+            }
+
+            val monthNum = monthNamesEnAr[monthStr]
+                ?: monthNamesEnAr.entries.firstOrNull { monthStr.contains(it.key) }?.value
+
+            if (monthNum == null) return@let
+
+            val day = (dayStr ?: dayStr2)?.toIntOrNull() ?: return@let
+
+            try {
+                var date = LocalDate.of(today.year, monthNum, day)
+
+                // If date is in the past → assume next year
+                if (!date.isAfter(today)) {
+                    date = date.plusYears(1)
+                }
+
+                return TemporalResult(date)
+            } catch (_: Exception) {
+                // invalid day for month → skip
+            }
+        }
+        return null
+    }
+
+    // =====================================================
+    // RANGE
+    // =====================================================
+    private fun parseRange(text: String): TemporalResult? {
+
+        // This regex now correctly handles:
+        // من يوم الاحد ليوم الثلاثاء
+        // من الاحد للثلاثاء
+        // من يوم الخميس الى يوم الجمعة
+        // من الأحد إلى الثلاثاء
+        //من 5/3 الى  7/3
+        val regex = Regex(
+            """من\s+(?:يوم\s+)?(.+?)\s+(ل|الى|إلى)\s*(?:يوم\s+)?(.+)""",
+            RegexOption.DOT_MATCHES_ALL
+        )
+
+        val match = regex.find(text) ?: return null
+
+        val startText = match.groupValues[1].trim()
+        val endText   = match.groupValues[3].trim()
+
+        val startDay = extractWeekday(startText)
+        val endDay   = extractWeekday(endText)
+
+
+        if (startDay != null && endDay != null) {
+            val startDate = nextWeekday(startDay)
+            var endDate = nextWeekday(endDay)
+
+            if (!endDate.isAfter(startDate)) {
+                endDate = endDate.plusWeeks(1)
+            }
+            return TemporalResult(startDate, endDate, false)
+        }
+
+
+        val start = parse(startText)
+        val end   = parse(endText)
+
+
+        if (start != null && end != null) {
+            return TemporalResult(start.startDate, end.startDate)
+        }
+
+        return null
+    }
+    // =====================================================
+    // RECURRING
+    // =====================================================
+    private fun parseRecurring(text: String): TemporalResult? {
+
+        val regex = Regex(
+            """كل\s+(?:يوم\s+)?(?:ال)?\s*(احد|أحد|اثنين|اتنين|ثلاثاء|تلات|اربعاء|اربع|خميس|جمعة|جمعه|سبت)"""
+        )
+
+        val match = regex.find(text) ?: return null
+
+        val day = resolveWeekday(match.groupValues[1]) ?: return null
+        val next = nextWeekday(day)
+
+        return TemporalResult(next, isRecurring = true)
+    }
+
+
+
+    // =====================================================
+    // MONTH / WEEK RELATIVE
+    // =====================================================
+    private fun parseMonthOrWeekRelative(text: String): TemporalResult? {
+
+        val regex = Regex("""(الشهر|الاسبوع|الأسبوع)\s+(الجاي|اللي\s+جاي|القادم|بعد\s+الجاي|بعد\s+اللي\s+جاي)""")
+        val match = regex.find(text) ?: return null
+
+        val unit = match.groupValues[1]
+        val modifier = match.groupValues[2]
+
+        return when (unit) {
+
+            "الشهر" -> {
+                var date = today.plusMonths(1).withDayOfMonth(1)
+                if (modifier.contains("بعد")) date = date.plusMonths(1)
+                TemporalResult(date)
+            }
+
+            "الاسبوع", "الأسبوع" -> {
+                var date = today.with(TemporalAdjusters.next(DayOfWeek.SUNDAY))
+                if (modifier.contains("بعد")) date = date.plusWeeks(1)
+                TemporalResult(date)
+            }
+
+            else -> null
+        }
+    }
+
+    // =====================================================
+    // MONTH / WEEK BOUNDARY
+    // =====================================================
+
+    private fun parseMonthWeekBoundary(text: String): TemporalResult? {
+
+        val regex = Regex(
+            """(اول|بدايه|بداية|نص|منتصف|اخر|آخر)\s*(الشهر|الاسبوع|الأسبوع)(?:\s+(الجاي|اللي\s+جاي|القادم|بعد\s+الجاي|بعد\s+اللي\s+جاي))?""",
+            setOf(RegexOption.DOT_MATCHES_ALL)  // helps with any rare multiline cases
+        )
+
+        val match = regex.find(text) ?: return null
+
+        val position = match.groupValues[1]
+        val unit = match.groupValues[2]
+        val modifier = match.groupValues.getOrNull(4) ?: ""
+
+        return when (unit) {
+
+            "الشهر" -> {
+                var baseMonth = today
+                if (modifier.isNotBlank()) {
+                    baseMonth = today.plusMonths(1)
+                    if (modifier.contains("بعد")) baseMonth = baseMonth.plusMonths(1)
+                }
+
+                val date = when (position) {
+                    "اول","بدايه","بداية" -> baseMonth.withDayOfMonth(1)
+                    "نص","منتصف" -> baseMonth.withDayOfMonth(15)
+                    "اخر","آخر" -> baseMonth.withDayOfMonth(baseMonth.lengthOfMonth())
+                    else -> return null
+                }
+
+                TemporalResult(date)
+            }
+
+            "الاسبوع","الأسبوع" -> {
+                var baseWeek = today.with(TemporalAdjusters.next(DayOfWeek.SUNDAY))
+                if (modifier.contains("بعد")) baseWeek = baseWeek.plusWeeks(1)
+
+                val date = when (position) {
+                    "اول","بدايه","بداية" -> baseWeek
+                    "نص","منتصف" -> baseWeek.plusDays(2)
+                    "اخر","آخر" -> baseWeek.plusDays(6)
+                    else -> return null
+                }
+
+                TemporalResult(date)
+            }
+
+            else -> null
+        }
+    }
+
+    // =====================================================
+    // WEEKDAY
+    // =====================================================
+    private fun parseWeekday(text: String): TemporalResult? {
+        val regex = Regex(
+            """(?:يوم\s+)?(?:ال)?\s*(احد|أحد|اثنين|اتنين|ثلاثاء|تلات|اربعاء|اربع|خميس|جمعة|جمعه|سبت)"""
+                    + """\s*"""
+                    + """(الجاي|اللي\s+جاي|القادم|القادمة|بعد\s+الجاي|بعد\s+اللي\s+جاي)?\b"""
+        )
+
+        val match = regex.find(text) ?: return null
+        val day = resolveWeekday(match.groupValues[1]) ?: return null
+        var date = nextWeekday(day)
+
+        val modifier = match.groupValues.getOrNull(2) ?: ""
+        if (modifier.contains("بعد")) date = date.plusWeeks(1)
+
+        return TemporalResult(date)
+    }
+
+    // =====================================================
+    // RELATIVE NUMERIC
+    // =====================================================
+    private fun parseRelativeNumeric(text: String): TemporalResult? {
+
+        // Dual forms (no number → assume 1)
+        val singleUnit = Regex("""(بعد|كمان)\s+(شهر|شهور|اسبوع|أسبوع|اسابيع|يوم|ايام|سنه|سنة|عام|سنين)""")
+        singleUnit.find(text)?.let {
+            val unit = it.groupValues[2]
+            return when (unit) {
+                "شهر", "شهور" -> TemporalResult(today.plusMonths(1))
+                "اسبوع", "أسبوع", "اسابيع" -> TemporalResult(today.plusWeeks(1))
+                "يوم", "ايام" -> TemporalResult(today.plusDays(1))
+                "سنه", "سنة", "عام", "سنين" -> TemporalResult(today.plusYears(1))
+                else -> null
+            }
+        }
+        val dual = Regex("""(بعد|كمان)\s+(يومين|يومان|اسبوعين|أسبوعين|شهرين|شهران|سنتين|عامين)""")
+        dual.find(text)?.let {
+            val token = it.groupValues[2]
+            val date = when (token) {
+                "يومين","يومان" -> today.plusDays(2)
+                "اسبوعين","أسبوعين" -> today.plusWeeks(2)
+                "شهرين","شهران" -> today.plusMonths(2)
+                "سنتين","عامين" -> today.plusYears(2)
+                else -> return null
+            }
+            return TemporalResult(date)
+        }
+
+        val regex = Regex("""(بعد|كمان)\s+(\d+|\p{L}+)\s+(يوم|ايام|اسبوع|اسابيع|شهر|شهور|سنة|سنين|عام|اعوام)""")
+        val match = regex.find(text) ?: return null
+
+        val rawNumber = match.groupValues[2]
+        val number = rawNumber.toLongOrNull()
+            ?: numberWords[rawNumber]?.toLong()
+            ?: return null
+
+        val unit = match.groupValues[3]
+
+        val date = when (unit) {
+            "يوم","ايام" -> today.plusDays(number)
+            "اسبوع","اسابيع" -> today.plusWeeks(number)
+            "شهر","شهور" -> today.plusMonths(number)
+            "سنة","سنين","عام","اعوام" -> today.plusYears(number)
+            else -> return null
+        }
+
+        return TemporalResult(date)
+    }
+
+    // =====================================================
+    // SINGLE DAY
+    // =====================================================
+    private fun parseSingleDay(text: String): TemporalResult? {
+
+        if (Regex("""(بعد|كمان)\s+(بكره|يوم|بكرة|غد)""").containsMatchIn(text))
+            return TemporalResult(today.plusDays(2))
+
+        if (Regex("""(بكره|بكرة|غد|غدا)""").containsMatchIn(text))
+            return TemporalResult(today.plusDays(1))
+
+        return null
+    }
+
+    // =====================================================
+    // HELPERS
+    // =====================================================
+    private fun extractWeekday(text: String): DayOfWeek? {
+        val cleanedText = text.trim()
+        val regex = Regex(
+            """(?:يوم\s+)?(?:ال)?\s*(احد|أحد|اثنين|اتنين|ثلاثاء|تلات|اربعاء|اربع|خميس|جمع[ةه]|جمعه?|سبت)\b""",
+            RegexOption.IGNORE_CASE
+        )
+        val match = regex.find(cleanedText) ?: return null
+        val dayStr = match.groupValues[1]
+        return resolveWeekday(dayStr)
+    }
+    private fun resolveWeekday(ar: String): DayOfWeek? {
+        val cleaned = ar
+            .replace("ال", "")
+            .replace("\\s+".toRegex(), "")
+            .lowercase()
+            .replace("أ", "ا")
+            .replace("إ", "ا")
+            .replace("ة", "ه")
+
+        return when {
+            cleaned in listOf("احد", "أحد", "احد") -> DayOfWeek.SUNDAY
+            cleaned in listOf("اثنين", "اتنين", "اثنين") -> DayOfWeek.MONDAY
+            cleaned in listOf("ثلاثاء", "تلات", "ثلاثاء") -> DayOfWeek.TUESDAY
+            cleaned in listOf("اربعاء", "اربع", "اربعاء") -> DayOfWeek.WEDNESDAY
+            cleaned.contains("خميس") -> DayOfWeek.THURSDAY
+            cleaned in listOf("جمعة", "جمعه", "جمعه") -> DayOfWeek.FRIDAY
+            cleaned.contains("سبت") -> DayOfWeek.SATURDAY
+            else -> null
+        }
+    }
+
+    private fun nextWeekday(target: DayOfWeek): LocalDate {
+        var daysUntil = target.value - today.dayOfWeek.value
+        if (daysUntil <= 0) daysUntil += 7
+        return today.plusDays(daysUntil.toLong())
+    }
+
+    private fun normalizeDigits(text: String): String =
+        text.replace("٠","0")
+            .replace("١","1")
+            .replace("٢","2")
+            .replace("٣","3")
+            .replace("٤","4")
+            .replace("٥","5")
+            .replace("٦","6")
+            .replace("٧","7")
+            .replace("٨","8")
+            .replace("٩","9")
+
+    private val numberWords = mapOf(
+        "واحد" to 1,"واحدة" to 1,
+        "اتنين" to 2,"اثنين" to 2,
+        "تلات" to 3,"ثلاث" to 3,"ثلاثة" to 3,
+        "اربعة" to 4,"خمسة" to 5,
+        "ستة" to 6,"سبعة" to 7,
+        "تمانية" to 8,"ثمانية" to 8,
+        "تسعة" to 9,"عشرة" to 10
+    )
+}
+
+
+
+
+
