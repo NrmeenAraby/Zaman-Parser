@@ -17,9 +17,10 @@ object TimeParser {
     fun parse(input: String): TimeResult? {
         val text = normalize(input)
 
-        parseNaturalExpression(text)?.let { return it }  // تمانيه ونص، تسعه وتلت، الا ربع، ربعايه...
-        parseRelative(text)?.let { return it }           // بعد ساعة، كمان يومين، بعد شهر...
         parseNumericClock(text)?.let { return it }       // 10:30, 3:00 مساء, 09:00 AM...
+        parseNaturalExpression(text)?.let { return it }  // تمانيه ونص، تسعه وتلت، الا ربع، ربعايه...
+        parseRelativeCompound(text)?.let { return it }
+        parseRelative(text)?.let { return it }           // بعد ساعة، كمان يومين، بعد شهر...
      //   parseNaturalExpression(text)?.let { return it }  // تمانيه ونص، تسعه وتلت، الا ربع، ربعايه...
         parseDayPartOnly(text)?.let { return it }        // بعد الضهر، العصر، بالليل...
 
@@ -46,7 +47,95 @@ object TimeParser {
             it.groupValues[1] + " و"
         }
     }
+    // =====================================================
+    // ADVANCED RELATIVE (بعد / كمان + hour structure + (و | الا))
+    // =====================================================
+    private fun parseRelativeCompound(text: String): TimeResult? {
 
+        val fixed = fixMissingSpaces(text)
+
+        val startRegex = Regex("""^(بعد|كمان)\s+(.+)$""")
+        val startMatch = startRegex.find(fixed) ?: return null
+
+        val body = startMatch.groupValues[2].trim()
+
+        // MUST contain either "و" or "الا"
+        if (!body.contains("و") && !body.contains("الا")) {
+            return null
+        }
+
+        // -------------------------
+        //  Extract hour part
+        // -------------------------
+        val hourRegex = Regex("""^(\d{1,2}|\p{L}+)?\s*(ساعه|ساعة|ساعات|ساعتين|ساعتان)""")
+        val hourMatch = hourRegex.find(body) ?: return null
+
+        val hourNumberRaw = hourMatch.groupValues[1]
+        val hourUnit = hourMatch.groupValues[2]
+
+        val hours = when {
+            hourUnit.contains("ساعتين") || hourUnit.contains("ساعتان") -> 2
+            hourNumberRaw.isBlank() -> 1
+            else -> parseComplexNumber(hourNumberRaw) ?: return null
+        }
+
+        var totalMinutes = hours * 60
+
+        val rest = body.removePrefix(hourMatch.value).trim()
+
+        if (rest.isBlank()) return null // let parseRelative handle it
+
+        // -------------------------
+        //  Addition (و ...)
+        // -------------------------
+        val addRegex = Regex("""و\s*(.+)""")
+        addRegex.find(rest)?.let { match ->
+            val token = match.groupValues[1]
+                .replace("دقيقه","")
+                .replace("دقيقة","")
+                .replace("دقايق","")
+                .replace("دقائق","")
+                .trim()
+
+            val addMinutes = when {
+                token.contains("نص") -> 30
+                token.contains("ربع") -> 15
+                token.contains("تلت") -> 20
+                else -> parseComplexNumber(token) ?: 0
+            }
+
+            totalMinutes += addMinutes
+        }
+
+        // -------------------------
+        //  Subtraction (الا ...)
+        // -------------------------
+        val minusRegex = Regex("""الا\s+(.+)""")
+        minusRegex.find(rest)?.let { match ->
+            val token = match.groupValues[1]
+                .replace("دقيقه","")
+                .replace("دقيقة","")
+                .replace("دقايق","")
+                .replace("دقائق","")
+                .trim()
+
+            val minusMinutes = when {
+                token.contains("نص") -> 30
+                token.contains("ربع") -> 15
+                token.contains("تلت") -> 20
+                else -> parseComplexNumber(token) ?: 0
+            }
+
+            totalMinutes -= minusMinutes
+        }
+
+        if (totalMinutes <= 0) return null
+
+        return TimeResult(
+            now.plusMinutes(totalMinutes.toLong())
+                .truncatedTo(ChronoUnit.MINUTES)
+        )
+    }
     // =====================================================
     // 1. RELATIVE (بعد / كمان + full unit)
     // =====================================================
@@ -91,8 +180,6 @@ object TimeParser {
         }
         return null
     }
-
-
     // =====================================================
     // 2. NUMERIC CLOCK (10:30, 3:00 مساء, 09:00 AM...)
     // =====================================================
@@ -109,9 +196,8 @@ object TimeParser {
 
         if (rawHour > 23 || minute > 59) return null
 
-        // Use the same safe adjustByContext (returns null on ambiguity)
         val finalHour = adjustByContext(rawHour, text) ?: return null
-
+        //println("parseNumericClock")
         return TimeResult(LocalTime.of(finalHour, minute))
     }
 
@@ -187,7 +273,6 @@ object TimeParser {
                 token.contains("نص") -> 30
                 token.contains("ربع") -> 15
                 token.contains("تلت") -> 20
-                token == "تلتين" -> 40
                 else -> parseNumber(token) ?: 0
             }
 
