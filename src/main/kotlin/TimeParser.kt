@@ -247,7 +247,6 @@ object TimeParser {
                 token.contains("نص") -> 30
                 token.contains("ربع") -> 15
                 token.contains("تلت") -> 20
-                token == "تلتين" -> 40
                 else -> parseNumber(token) ?: 0
             }
 
@@ -355,6 +354,7 @@ object TimeParser {
                     lowerText.contains("عصر") ||
                     lowerText.contains("عصرا")||
                     lowerText.contains("pm") ||
+                    lowerText.contains("م")||
                     lowerText.contains("p.m") -> {
                 if (hour < 12) hour + 12 else hour
             }
@@ -362,6 +362,7 @@ object TimeParser {
             // Clear AM / morning context
             lowerText.contains("صباح") ||
                     lowerText.contains("الصبح") ||
+                    lowerText.contains("ص") ||
                     lowerText.contains("am") ||
                     lowerText.contains("a.m") -> {
                 if (hour == 12) 0 else hour

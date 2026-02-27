@@ -101,9 +101,10 @@ fun main() {
 
     )
     val Tmptests = listOf(
-        "20:30",
+        "6 م",
+        "7 ص"
     )
-    for (t in TimeTestCases) {
+    for (t in Tmptests) {
         println("$t -> ${TimeParser.parse(t)}")
     }
 }

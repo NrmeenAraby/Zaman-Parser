@@ -171,7 +171,7 @@ object TemporalParser {
         }
 
         // ───────────────────────────────────────────────────────────────
-        // New pattern: short forms without year and without strict separator
+        // short forms without year and without strict separator
         // Examples: 25 Dec, 23 يناير, Dec 25, يناير ٢٣, ١٥ أكتوبر
         // ───────────────────────────────────────────────────────────────
         val shortMonthDayRegex = Regex(
@@ -222,7 +222,6 @@ object TemporalParser {
     // =====================================================
     private fun parseRange(text: String): TemporalResult? {
 
-        // This regex now correctly handles:
         // من يوم الاحد ليوم الثلاثاء
         // من الاحد للثلاثاء
         // من يوم الخميس الى يوم الجمعة
