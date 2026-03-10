@@ -14,19 +14,19 @@ object TimeParser {
     // =====================================================
     // ENTRY
     // =====================================================
-    fun parse(input: String): TimeResult? {
+    fun parse(input: String):  List<TimeResult> {
         val text = normalize(input)
+        parseEveryHours(text)?.let { return it }                  // returns List<TimeResult> so no need fo listOf()
+        parseNumericClock(text)?.let { return listOf(it) }       // 10:30, 3:00 مساء, 09:00 AM...
+        parseRelativeCompound(text)?.let { return listOf(it) }
+        parseRelative(text)?.let { return listOf(it) }           // بعد ساعة، كمان يومين، بعد شهر...
+        parseNaturalExpression(text)?.let { return listOf(it) }  // تمانيه ونص، تسعه وتلت، الا ربع، ربعايه...
+        //   parseRelativeCompound(text)?.let { return listOf(it) }
+      //  parseRelative(text)?.let { return listOf(it) }           // بعد ساعة، كمان يومين، بعد شهر...
+     //   parseNaturalExpression(text)?.let { return listOf(it) }  // تمانيه ونص، تسعه وتلت، الا ربع، ربعايه...
+        parseDayPartOnly(text)?.let { return listOf(it) }        // بعد الضهر، العصر، بالليل...
 
-        parseNumericClock(text)?.let { return it }       // 10:30, 3:00 مساء, 09:00 AM...
-        parseRelativeCompound(text)?.let { return it }
-        parseRelative(text)?.let { return it }           // بعد ساعة، كمان يومين، بعد شهر...
-        parseNaturalExpression(text)?.let { return it }  // تمانيه ونص، تسعه وتلت، الا ربع، ربعايه...
-        //   parseRelativeCompound(text)?.let { return it }
-      //  parseRelative(text)?.let { return it }           // بعد ساعة، كمان يومين، بعد شهر...
-     //   parseNaturalExpression(text)?.let { return it }  // تمانيه ونص، تسعه وتلت، الا ربع، ربعايه...
-        parseDayPartOnly(text)?.let { return it }        // بعد الضهر، العصر، بالليل...
-
-        return null
+        return emptyList()
     }
 
     // =====================================================
@@ -48,6 +48,30 @@ object TimeParser {
         return text.replace(Regex("""(\p{L}+?)و(?=\p{L}+)""")) {
             it.groupValues[1] + " و"
         }
+    }
+    // =====================================================
+    //   Match "كل X ساعة" or "كل X ساعات"
+    // =====================================================
+    private fun parseEveryHours(text: String): List<TimeResult>? {
+        // Match "كل X ساعة" anywhere in the text
+        val regex = Regex("""\bكل\s+([\p{L}\d\sو]+)\s*(ساعه|ساعات)\b""")
+        val match = regex.find(text) ?: return null
+
+        val intervalText = match.groupValues[1].trim()
+        val interval = parseComplexNumber(intervalText) ?: intervalText.toIntOrNull() ?: return null
+
+        if (interval <= 0 || interval > 24) return null
+
+        val startHour = 6 // default starting time (06:00 AM)
+        val occurrences = mutableListOf<TimeResult>()
+
+        var currentHour = startHour
+        while (currentHour < 24) {
+            occurrences.add(TimeResult(LocalTime.of(currentHour % 24, 0)))
+            currentHour += interval
+        }
+
+        return occurrences
     }
     // =====================================================
     // ADVANCED RELATIVE (بعد / كمان + hour structure + (و | الا))
@@ -410,14 +434,14 @@ object TimeParser {
         val base = listOf("واحد","اتنين","اثنين","تلاته","ثلاثه","اربعه","خمسه","سته","سبعه","تمانيه","تسعه")
         put("واحد",1); put("واحده",1)
         put("اتنين",2); put("اثنين",2)
-        put("تلاته",3); put("ثلاثه",3)
-        put("اربعه",4)
-        put("خمسه",5)
-        put("سته",6)
-        put("سبعه",7)
-        put("تمانيه",8)
-        put("تسعه",9)
-        put("عشره",10)
+        put("تلاته",3); put("ثلاثه",3);put("تلت",3)
+        put("اربعه",4);put("اربع",4)
+        put("خمسه",5);put("خمس",5)
+        put("سته",6);put("ست",6)
+        put("سبعه",7);put("سبع",7)
+        put("تمانيه",8);put("تمن",8)
+        put("تسعه",9);put("تسع",9)
+        put("عشره",10); put("عشر",10)
         put("حداشر",11)
         put("اتناشر",12)
         put("تلتاشر",13)

@@ -128,7 +128,7 @@ fun main() {
         "خلينا نتقابل خمسه العصر قدام الشركه",
         "احنا ممكن نتحرك اربعة عصرا عشان الطريق",
         "طب نخرج 7 بالليل نتمشى شويه",
-        "خلينا نبدأ الاجتماع 09:00 عشان نخلص بدري",
+        "خلينا نبدأ الاجتماع 09:00 و نخلص بدري",
         "الاجتماع هيكون 10:00 مساء في القاعه",
         "احنا متفقين نتقابل 3:00 مساءا قدام الكافيه",
         "الفيلم هيبدأ 20:30 في السينما",
@@ -140,14 +140,27 @@ fun main() {
         "طب نتكلم بعد العشاء لو فاضي",
         "خلينا نخرج بالليل نتمشى شويه",
         "الاجتماع هيبدأ 6 م في المكتب",
-        "صحيني 7 ص عشان عندي معاد"
+        "صحيني 7 ص عشان عندي معاد",
+        "كل 8 ساعات"
 
     )
     val Tmptests = listOf(
-        "طب خلينا نتقابل 8 ونص الا خمسه العشا قدام المطعم",
+        "صحيني 7 ص عشان عندي معاد",
+        "خلينا نبدأ الاجتماع 09:00 عشان نخلص بدري",
+        "كل 8 ساعات"
 
         )
-    for (t in Tmptests) {
-        println("$t -> ${TimeParser.parse(t)}")
+    for (t in TimeTestCasesSentences) {
+        val results = TimeParser.parse(t)
+        println("$t -> ${results.joinToString { it.time.toString() }}")
     }
+//    for (t in TimeTestCasesSentences) {
+//        println("$t -> ${TimeParser.parse(t)}")
+//    }
+//    for (t in TimeTestCasesSentences) {
+//        val results = TimeParser.parse(t)  // returns List<TimeResult>
+//        for(r in results){
+//            println(r)
+//        }
+//    }
 }
