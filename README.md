@@ -86,8 +86,9 @@ Handles:
 Just clone the repository and include the module in your Kotlin/Android project:
 
 ---
-##🤝 Contributing
+## 🤝 Contributing
 
 Contributions are welcome!
 Feel free to submit a PR to improve parsing accuracy, add new expressions, or extend dialect support.
+
 ---
