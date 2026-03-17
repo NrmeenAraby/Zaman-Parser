@@ -317,7 +317,7 @@ object TemporalParser {
     private fun parseMonthWeekBoundary(text: String): TemporalResult? {
 
         val regex = Regex(
-            """(اول|بدايه|بداية|نص|منتصف|اخر|آخر)\s*(الشهر|الاسبوع|الأسبوع)(?:\s+(الجاي|اللي\s+جاي|القادم|بعد\s+الجاي|بعد\s+اللي\s+جاي))?""",
+            """(اول|بدايه|بداية|نص|منتصف|نصف|اخر|آخر)\s*(الشهر|الاسبوع|الأسبوع)(?:\s+(الجاي|اللي\s+جاي|القادم|بعد\s+الجاي|بعد\s+اللي\s+جاي))?""",
             setOf(RegexOption.DOT_MATCHES_ALL)  // helps with any rare multiline cases
         )
 
@@ -338,7 +338,7 @@ object TemporalParser {
 
                 val date = when (position) {
                     "اول","بدايه","بداية" -> baseMonth.withDayOfMonth(1)
-                    "نص","منتصف" -> baseMonth.withDayOfMonth(15)
+                    "نص","منتصف","نصف" -> baseMonth.withDayOfMonth(15)
                     "اخر","آخر" -> baseMonth.withDayOfMonth(baseMonth.lengthOfMonth())
                     else -> return null
                 }
@@ -352,7 +352,7 @@ object TemporalParser {
 
                 val date = when (position) {
                     "اول","بدايه","بداية" -> baseWeek
-                    "نص","منتصف" -> baseWeek.plusDays(2)
+                    "نص","منتصف","نصف" -> baseWeek.plusDays(2)
                     "اخر","آخر" -> baseWeek.plusDays(6)
                     else -> return null
                 }
@@ -389,18 +389,6 @@ object TemporalParser {
     // =====================================================
     private fun parseRelativeNumeric(text: String): TemporalResult? {
 
-        // Dual forms (no number → assume 1)
-        val singleUnit = Regex("""(بعد|كمان)\s+(شهر|شهور|اسبوع|أسبوع|اسابيع|يوم|ايام|سنه|سنة|عام|سنين)""")
-        singleUnit.find(text)?.let {
-            val unit = it.groupValues[2]
-            return when (unit) {
-                "شهر", "شهور" -> TemporalResult(today.plusMonths(1))
-                "اسبوع", "أسبوع", "اسابيع" -> TemporalResult(today.plusWeeks(1))
-                "يوم", "ايام" -> TemporalResult(today.plusDays(1))
-                "سنه", "سنة", "عام", "سنين" -> TemporalResult(today.plusYears(1))
-                else -> null
-            }
-        }
         val dual = Regex("""(بعد|كمان)\s+(يومين|يومان|اسبوعين|أسبوعين|شهرين|شهران|سنتين|عامين)""")
         dual.find(text)?.let {
             val token = it.groupValues[2]
@@ -413,6 +401,19 @@ object TemporalParser {
             }
             return TemporalResult(date)
         }
+        // Dual forms (no number → assume 1)
+        val singleUnit = Regex("""(بعد|كمان)\s+(شهر|شهور|اسبوع|أسبوع|اسابيع|يوم|ايام|سنه|سنة|عام|سنين)""")
+        singleUnit.find(text)?.let {
+            val unit = it.groupValues[2]
+            return when (unit) {
+                "شهر", "شهور" -> TemporalResult(today.plusMonths(1))
+                "اسبوع", "أسبوع", "اسابيع" -> TemporalResult(today.plusWeeks(1))
+                "يوم", "ايام" -> TemporalResult(today.plusDays(1))
+                "سنه", "سنة", "عام", "سنين" -> TemporalResult(today.plusYears(1))
+                else -> null
+            }
+        }
+
 
         val regex = Regex("""(بعد|كمان)\s+(\d+|\p{L}+)\s+(يوم|ايام|اسبوع|اسابيع|شهر|شهور|سنة|سنين|عام|اعوام)""")
         val match = regex.find(text) ?: return null

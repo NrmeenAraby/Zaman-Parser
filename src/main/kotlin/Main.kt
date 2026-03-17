@@ -57,9 +57,9 @@ fun main() {
 
 
 
-//    for (t in tests) {
-//        println("$t -> ${TemporalParser.parse(t)}")
-//    }
+    for (t in tests) {
+        println("$t -> ${TemporalParser.parse(t)}")
+    }
 
     val TimeTestCases = listOf(
         "بعد ربع ساعه ",
@@ -150,10 +150,11 @@ fun main() {
         "كل 8 ساعات"
 
         )
-    for (t in TimeTestCasesSentences) {
-        val results = TimeParser.parse(t)
-        println("$t -> ${results.joinToString { it.time.toString() }}")
-    }
+//    for (t in TimeTestCasesSentences) {
+//        val results = TimeParser.parse(t)
+//        println("$t -> ${results.joinToString { it.time.toString() }}")
+//    }
+
 //    for (t in TimeTestCasesSentences) {
 //        println("$t -> ${TimeParser.parse(t)}")
 //    }
