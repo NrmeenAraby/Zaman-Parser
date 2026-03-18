@@ -22,11 +22,12 @@ object TemporalParser {
         parseRange(text)?.let { return it }
         parseRecurring(text)?.let { return it }
         parseFlexibleDate(text)?.let { return it }
-      //  parseAbsoluteMonthName(text)?.let { return it }
+        //  parseAbsoluteMonthName(text)?.let { return it }
         parseMonthOrWeekRelative(text)?.let { return it }
         parseMonthWeekBoundary(text)?.let { return it }
-        parseWeekday(text)?.let { return it }
         parseRelativeNumeric(text)?.let { return it }
+        parseWeekday(text)?.let { return it }
+       // parseRelativeNumeric(text)?.let { return it }
         parseSingleDay(text)?.let { return it }
 
         return null
@@ -510,7 +511,7 @@ object TemporalParser {
     private val numberWords = mapOf(
         "واحد" to 1,"واحدة" to 1,
         "اتنين" to 2,"اثنين" to 2,
-        "تلات" to 3,"ثلاث" to 3,"ثلاثة" to 3,
+        "تلاته" to 3,"تلات" to 3,"ثلاث" to 3,"ثلاثة" to 3,
         "اربعة" to 4,"خمسة" to 5,
         "ستة" to 6,"سبعة" to 7,
         "تمانية" to 8,"ثمانية" to 8,
