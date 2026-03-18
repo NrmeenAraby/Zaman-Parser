@@ -1,8 +1,7 @@
 import java.time.*
 import java.time.temporal.TemporalAdjusters
-import java.util.*
 
-data class TemporalResult(
+data class DateResult(
     val startDate: LocalDate,
     val endDate: LocalDate? = null,
     val isRecurring: Boolean = false
@@ -16,7 +15,7 @@ object TemporalParser {
     // =====================================================
     // ENTRY
     // =====================================================
-    fun parse(input: String): TemporalResult? {
+    fun parse(input: String): DateResult? {
 
         val text = normalizeArabic(input.trim())
 
@@ -53,7 +52,7 @@ object TemporalParser {
     // =====================================================
     // FLEXIBLE DATE
     // =====================================================
-    private fun parseFlexibleDate(text: String): TemporalResult? {
+    private fun parseFlexibleDate(text: String): DateResult? {
 
         // ───────────────────────────────────────────────────────────────
         // 1. Try numeric formats: dd/mm, mm/dd, yyyy-mm-dd, dd/mm/yyyy etc.
@@ -78,7 +77,7 @@ object TemporalParser {
                     p3.length == 4 -> LocalDate.of(p3.toInt(), p2.toInt(), p1.toInt())
                     else -> return null
                 }
-                return TemporalResult(date)
+                return DateResult(date)
             } catch (_: Exception) {
                 // invalid date (e.g. 30/02) → continue to next parser
             }
@@ -139,7 +138,7 @@ object TemporalParser {
             if (monthNum != null) {
                 try {
                     val date = LocalDate.of(yearStr.toInt(), monthNum, dayStr.toInt())
-                    return TemporalResult(date)
+                    return DateResult(date)
                 } catch (_: Exception) {
                     // invalid day/month → skip
                 }
@@ -163,7 +162,7 @@ object TemporalParser {
             if (monthNum != null) {
                 try {
                     val date = LocalDate.of(yearStr.toInt(), monthNum, dayStr.toInt())
-                    return TemporalResult(date)
+                    return DateResult(date)
                 } catch (_: Exception) {
                     // invalid → skip
                 }
@@ -209,7 +208,7 @@ object TemporalParser {
                     date = date.plusYears(1)
                 }
 
-                return TemporalResult(date)
+                return DateResult(date)
             } catch (_: Exception) {
                 // invalid day for month → skip
             }
@@ -220,7 +219,7 @@ object TemporalParser {
     // =====================================================
     // RANGE
     // =====================================================
-    private fun parseRange(text: String): TemporalResult? {
+    private fun parseRange(text: String): DateResult? {
 
         // من يوم الاحد ليوم الثلاثاء
         // من الاحد للثلاثاء
@@ -248,7 +247,7 @@ object TemporalParser {
             if (!endDate.isAfter(startDate)) {
                 endDate = endDate.plusWeeks(1)
             }
-            return TemporalResult(startDate, endDate, false)
+            return DateResult(startDate, endDate, false)
         }
 
 
@@ -257,7 +256,7 @@ object TemporalParser {
 
 
         if (start != null && end != null) {
-            return TemporalResult(start.startDate, end.startDate)
+            return DateResult(start.startDate, end.startDate)
         }
 
         return null
@@ -265,7 +264,7 @@ object TemporalParser {
     // =====================================================
     // RECURRING
     // =====================================================
-    private fun parseRecurring(text: String): TemporalResult? {
+    private fun parseRecurring(text: String): DateResult? {
 
         val regex = Regex(
             """كل\s+(?:يوم\s+)?(?:ال)?\s*(احد|أحد|اثنين|اتنين|ثلاثاء|تلات|اربعاء|اربع|خميس|جمعة|جمعه|سبت)"""
@@ -276,7 +275,7 @@ object TemporalParser {
         val day = resolveWeekday(match.groupValues[1]) ?: return null
         val next = nextWeekday(day)
 
-        return TemporalResult(next, isRecurring = true)
+        return DateResult(next, isRecurring = true)
     }
 
 
@@ -284,7 +283,7 @@ object TemporalParser {
     // =====================================================
     // MONTH / WEEK RELATIVE
     // =====================================================
-    private fun parseMonthOrWeekRelative(text: String): TemporalResult? {
+    private fun parseMonthOrWeekRelative(text: String): DateResult? {
 
         val regex = Regex("""(الشهر|الاسبوع|الأسبوع)\s+(الجاي|اللي\s+جاي|القادم|بعد\s+الجاي|بعد\s+اللي\s+جاي)""")
         val match = regex.find(text) ?: return null
@@ -297,13 +296,13 @@ object TemporalParser {
             "الشهر" -> {
                 var date = today.plusMonths(1).withDayOfMonth(1)
                 if (modifier.contains("بعد")) date = date.plusMonths(1)
-                TemporalResult(date)
+                DateResult(date)
             }
 
             "الاسبوع", "الأسبوع" -> {
                 var date = today.with(TemporalAdjusters.next(DayOfWeek.SUNDAY))
                 if (modifier.contains("بعد")) date = date.plusWeeks(1)
-                TemporalResult(date)
+                DateResult(date)
             }
 
             else -> null
@@ -314,7 +313,7 @@ object TemporalParser {
     // MONTH / WEEK BOUNDARY
     // =====================================================
 
-    private fun parseMonthWeekBoundary(text: String): TemporalResult? {
+    private fun parseMonthWeekBoundary(text: String): DateResult? {
 
         val regex = Regex(
             """(اول|بدايه|بداية|نص|منتصف|نصف|اخر|آخر)\s*(الشهر|الاسبوع|الأسبوع)(?:\s+(الجاي|اللي\s+جاي|القادم|بعد\s+الجاي|بعد\s+اللي\s+جاي))?""",
@@ -343,7 +342,7 @@ object TemporalParser {
                     else -> return null
                 }
 
-                TemporalResult(date)
+                DateResult(date)
             }
 
             "الاسبوع","الأسبوع" -> {
@@ -357,7 +356,7 @@ object TemporalParser {
                     else -> return null
                 }
 
-                TemporalResult(date)
+                DateResult(date)
             }
 
             else -> null
@@ -367,7 +366,7 @@ object TemporalParser {
     // =====================================================
     // WEEKDAY
     // =====================================================
-    private fun parseWeekday(text: String): TemporalResult? {
+    private fun parseWeekday(text: String): DateResult? {
         val regex = Regex(
             """(?:يوم\s+)?(?:ال)?\s*(احد|أحد|اثنين|اتنين|ثلاثاء|تلات|اربعاء|اربع|خميس|جمعة|جمعه|سبت)"""
                     + """\s*"""
@@ -381,13 +380,13 @@ object TemporalParser {
         val modifier = match.groupValues.getOrNull(2) ?: ""
         if (modifier.contains("بعد")) date = date.plusWeeks(1)
 
-        return TemporalResult(date)
+        return DateResult(date)
     }
 
     // =====================================================
     // RELATIVE NUMERIC
     // =====================================================
-    private fun parseRelativeNumeric(text: String): TemporalResult? {
+    private fun parseRelativeNumeric(text: String): DateResult? {
 
         val dual = Regex("""(بعد|كمان)\s+(يومين|يومان|اسبوعين|أسبوعين|شهرين|شهران|سنتين|عامين)""")
         dual.find(text)?.let {
@@ -399,31 +398,37 @@ object TemporalParser {
                 "سنتين","عامين" -> today.plusYears(2)
                 else -> return null
             }
-            return TemporalResult(date)
+            return DateResult(date)
         }
         // Dual forms (no number → assume 1)
-        val singleUnit = Regex("""(بعد|كمان)\s+(شهر|شهور|اسبوع|أسبوع|اسابيع|يوم|ايام|سنه|سنة|عام|سنين)""")
+        val singleUnit =
+            Regex("""(بعد|كمان)\s+(شهر|شهور|اسبوع|أسبوع|اسابيع|يوم|ايام|سنه|سنة|عام|سنين)""")
         singleUnit.find(text)?.let {
             val unit = it.groupValues[2]
             return when (unit) {
-                "شهر", "شهور" -> TemporalResult(today.plusMonths(1))
-                "اسبوع", "أسبوع", "اسابيع" -> TemporalResult(today.plusWeeks(1))
-                "يوم", "ايام" -> TemporalResult(today.plusDays(1))
-                "سنه", "سنة", "عام", "سنين" -> TemporalResult(today.plusYears(1))
+                "شهر", "شهور" -> DateResult(today.plusMonths(1))
+                "اسبوع", "أسبوع", "اسابيع" -> DateResult(today.plusWeeks(1))
+                "يوم", "ايام" -> DateResult(today.plusDays(1))
+                "سنه", "سنة", "عام", "سنين" -> DateResult(today.plusYears(1))
                 else -> null
             }
         }
 
 
-        val regex = Regex("""(بعد|كمان)\s+(\d+|\p{L}+)\s+(يوم|ايام|اسبوع|اسابيع|شهر|شهور|سنة|سنين|عام|اعوام)""")
+        val regex = Regex(
+            """(بعد|كمان)\s+(?:\p{L}+\s+)*?(\d+|\p{L}+)\s+(يوم|ايام|اسبوع|اسابيع|شهر|شهور|سنة|سنين|عام|اعوام)"""
+        )
+
         val match = regex.find(text) ?: return null
 
         val rawNumber = match.groupValues[2]
-        val number = rawNumber.toLongOrNull()
-            ?: numberWords[rawNumber]?.toLong()
-            ?: return null
-
         val unit = match.groupValues[3]
+
+        val normalizedNumber = normalizeArabic(rawNumber)
+
+        val number = normalizedNumber.toLongOrNull()
+            ?: numberWords[normalizedNumber]?.toLong()
+            ?: return null
 
         val date = when (unit) {
             "يوم","ايام" -> today.plusDays(number)
@@ -433,19 +438,19 @@ object TemporalParser {
             else -> return null
         }
 
-        return TemporalResult(date)
+        return DateResult(date)
     }
 
     // =====================================================
     // SINGLE DAY
     // =====================================================
-    private fun parseSingleDay(text: String): TemporalResult? {
+    private fun parseSingleDay(text: String): DateResult? {
 
         if (Regex("""(بعد|كمان)\s+(بكره|يوم|بكرة|غد)""").containsMatchIn(text))
-            return TemporalResult(today.plusDays(2))
+            return DateResult(today.plusDays(2))
 
         if (Regex("""(بكره|بكرة|غد|غدا)""").containsMatchIn(text))
-            return TemporalResult(today.plusDays(1))
+            return DateResult(today.plusDays(1))
 
         return null
     }

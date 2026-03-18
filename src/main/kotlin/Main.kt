@@ -51,11 +51,15 @@ fun main() {
         "بعد بكره",
         "بعد غد",
         "غد",
-        "بعد كمان يوم"
+        "بعد كمان يوم",
+        "بعد حوالي 3 ايام"
 
     )
 
-
+    val TmpDatetests = listOf(
+        "كمان يوم واحد",
+        "بعد تلات اسابيع",
+    )
 
     for (t in tests) {
         println("$t -> ${TemporalParser.parse(t)}")
