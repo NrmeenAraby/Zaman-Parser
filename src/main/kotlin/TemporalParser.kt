@@ -222,7 +222,12 @@ object TemporalParser {
     // RANGE
     // =====================================================
     private fun parseRange(text: String): DateResult? {
-
+        // من يوم الاحد ليوم الثلاثاء
+        // من الاحد للثلاثاء
+        // من يوم الخميس الى يوم الجمعة
+        // من الأحد إلى الثلاثاء
+        //من 5/3 الى  7/3
+        //من يوم الاحد الجاي للثلاثاء بعد الجاي
         val regex = Regex(
             """من\s+(?:يوم\s+)?(.+?)\s+(?:ل|الى|إلى)\s*(?:يوم\s+)?(.+)""",
             RegexOption.DOT_MATCHES_ALL
@@ -393,8 +398,13 @@ object TemporalParser {
         val day = resolveWeekday(match.groupValues[1]) ?: return null
         var date = nextWeekday(day)
 
-        val modifier = match.groupValues.getOrNull(2) ?: ""
-        if (modifier.contains("بعد")) date = date.plusWeeks(1)
+        val modifier = match.groupValues.getOrNull(2)?.trim() ?: ""
+
+        // or shift +1 week if modifier is exactly "بعد الجاي" / "بعد اللي جاي"
+        if (modifier.matches(Regex("""بعد\s+(القادم|القادمة|اللي\s+قادمة|اللي\s+قادم|الجاي|اللي\s+جاي)""")))
+         {
+            date = date.plusWeeks(1)
+        }
 
         return DateResult(date)
     }
