@@ -23,8 +23,9 @@ object TemporalParser {
         parseRecurring(text)?.let { return it }
         parseFlexibleDate(text)?.let { return it }
         //  parseAbsoluteMonthName(text)?.let { return it }
-        parseMonthOrWeekRelative(text)?.let { return it }
         parseMonthWeekBoundary(text)?.let { return it }
+        parseMonthOrWeekRelative(text)?.let { return it }
+        //parseMonthWeekBoundary(text)?.let { return it }
         parseRelativeNumeric(text)?.let { return it }
         parseWeekday(text)?.let { return it }
        // parseRelativeNumeric(text)?.let { return it }
@@ -285,7 +286,6 @@ object TemporalParser {
     // MONTH / WEEK RELATIVE
     // =====================================================
     private fun parseMonthOrWeekRelative(text: String): DateResult? {
-
         val regex = Regex("""(الشهر|الاسبوع|الأسبوع)\s+(الجاي|اللي\s+جاي|القادم|بعد\s+الجاي|بعد\s+اللي\s+جاي)""")
         val match = regex.find(text) ?: return null
 
@@ -317,23 +317,43 @@ object TemporalParser {
     private fun parseMonthWeekBoundary(text: String): DateResult? {
 
         val regex = Regex(
-            """(اول|بدايه|بداية|نص|منتصف|نصف|اخر|آخر)\s*(الشهر|الاسبوع|الأسبوع)(?:\s+(الجاي|اللي\s+جاي|القادم|بعد\s+الجاي|بعد\s+اللي\s+جاي))?""",
-            setOf(RegexOption.DOT_MATCHES_ALL)  // helps with any rare multiline cases
+            """(اول|بدايه|بداية|نص|منتصف|نصف|اخر|آخر)\s*(?:\p{L}+\s+)?(الشهر|الاسبوع|الأسبوع)(?:\s+(الجاي|اللي\s+جاي|القادم|بعد\s+الجاي|بعد\s+اللي\s+جاي))?""",
+            setOf(RegexOption.DOT_MATCHES_ALL)
         )
 
         val match = regex.find(text) ?: return null
 
         val position = match.groupValues[1]
         val unit = match.groupValues[2]
-        val modifier = match.groupValues.getOrNull(4) ?: ""
+        // <-- FIX: modifier is group 3 (not 4)
+        val modifier = match.groupValues.getOrNull(3) ?: ""
 
-        return when (unit) {
+        when (unit) {
 
             "الشهر" -> {
-                var baseMonth = today
-                if (modifier.isNotBlank()) {
-                    baseMonth = today.plusMonths(1)
-                    if (modifier.contains("بعد")) baseMonth = baseMonth.plusMonths(1)
+                // candidate in current month
+                val dayOfMonth = when (position) {
+                    "اول","بدايه","بداية" -> 1
+                    "نص","منتصف","نصف" -> 15
+                    "اخر","آخر" -> today.lengthOfMonth()
+                    else -> return null
+                }
+
+                val candidateThisMonth = try {
+                    today.withDayOfMonth(dayOfMonth)
+                } catch (_: Exception) {
+                    // invalid day (shouldn't happen) → fall back to next month
+                    today.plusMonths(1).withDayOfMonth(dayOfMonth)
+                }
+
+                val baseMonth = when {
+                    // explicit "بعد" means two months ahead of today
+                    modifier.contains("بعد") -> today.plusMonths(2)
+                    // explicit next means next month
+                    modifier.isNotBlank() -> today.plusMonths(1)
+                    // no modifier: if candidate is still upcoming (>= today) use current month, else next month
+                    candidateThisMonth.isBefore(today) -> today.plusMonths(1)
+                    else -> today
                 }
 
                 val date = when (position) {
@@ -343,24 +363,39 @@ object TemporalParser {
                     else -> return null
                 }
 
-                DateResult(date)
+                return DateResult(date)
             }
 
             "الاسبوع","الأسبوع" -> {
-                var baseWeek = today.with(TemporalAdjusters.next(DayOfWeek.SUNDAY))
-                if (modifier.contains("بعد")) baseWeek = baseWeek.plusWeeks(1)
+                // define week start as Sunday of the current week (previousOrSame)
+                val currentWeekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
 
-                val date = when (position) {
-                    "اول","بدايه","بداية" -> baseWeek
-                    "نص","منتصف","نصف" -> baseWeek.plusDays(2)
-                    "اخر","آخر" -> baseWeek.plusDays(6)
+                val candidateThisWeek = when (position) {
+                    "اول","بدايه","بداية" -> currentWeekStart
+                    "نص","منتصف","نصف" -> currentWeekStart.plusDays(2) // keep original +2 behavior
+                    "اخر","آخر" -> currentWeekStart.plusDays(6)
                     else -> return null
                 }
 
-                DateResult(date)
+                val baseWeekStart = when {
+                    modifier.contains("بعد") -> currentWeekStart.plusWeeks(2)
+                    modifier.isNotBlank() -> currentWeekStart.plusWeeks(1)
+                    // no modifier: use current week if the candidate hasn't passed yet, else next week
+                    candidateThisWeek.isBefore(today) -> currentWeekStart.plusWeeks(1)
+                    else -> currentWeekStart
+                }
+
+                val date = when (position) {
+                    "اول","بدايه","بداية" -> baseWeekStart
+                    "نص","منتصف","نصف" -> baseWeekStart.plusDays(2)
+                    "اخر","آخر" -> baseWeekStart.plusDays(6)
+                    else -> return null
+                }
+
+                return DateResult(date)
             }
 
-            else -> null
+            else -> return null
         }
     }
 
