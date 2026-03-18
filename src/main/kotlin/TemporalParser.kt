@@ -223,39 +223,19 @@ object TemporalParser {
     // =====================================================
     private fun parseRange(text: String): DateResult? {
 
-        // من يوم الاحد ليوم الثلاثاء
-        // من الاحد للثلاثاء
-        // من يوم الخميس الى يوم الجمعة
-        // من الأحد إلى الثلاثاء
-        //من 5/3 الى  7/3
         val regex = Regex(
-            """من\s+(?:يوم\s+)?(.+?)\s+(ل|الى|إلى)\s*(?:يوم\s+)?(.+)""",
+            """من\s+(?:يوم\s+)?(.+?)\s+(?:ل|الى|إلى)\s*(?:يوم\s+)?(.+)""",
             RegexOption.DOT_MATCHES_ALL
         )
 
         val match = regex.find(text) ?: return null
 
         val startText = match.groupValues[1].trim()
-        val endText   = match.groupValues[3].trim()
+        val endText   = match.groupValues[2].trim()
 
-        val startDay = extractWeekday(startText)
-        val endDay   = extractWeekday(endText)
-
-
-        if (startDay != null && endDay != null) {
-            val startDate = nextWeekday(startDay)
-            var endDate = nextWeekday(endDay)
-
-            if (!endDate.isAfter(startDate)) {
-                endDate = endDate.plusWeeks(1)
-            }
-            return DateResult(startDate, endDate, false)
-        }
-
-
+        //  use full parser instead of manual weekday logic
         val start = parse(startText)
         val end   = parse(endText)
-
 
         if (start != null && end != null) {
             return DateResult(start.startDate, end.startDate)
@@ -481,7 +461,6 @@ object TemporalParser {
     // SINGLE DAY
     // =====================================================
     private fun parseSingleDay(text: String): DateResult? {
-
         if (Regex("""(بعد|كمان)\s+(بكره|يوم|بكرة|غد)""").containsMatchIn(text))
             return DateResult(today.plusDays(2))
 
