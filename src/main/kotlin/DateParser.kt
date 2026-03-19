@@ -175,46 +175,54 @@ object DateParser {
         // short forms without year and without strict separator
         // Examples: 25 Dec, 23 يناير, Dec 25, يناير ٢٣, ١٥ أكتوبر
         // ───────────────────────────────────────────────────────────────
-        val shortMonthDayRegex = Regex(
-            """\b(?:(\d{1,2})\s+)?([a-zA-Z\u0600-\u06FF]{3,})\s*(?:(\d{1,2}))?\b""",
-            setOf(RegexOption.IGNORE_CASE)
-        )
+        val clean = normalizeArabic(text)
+        val tokens = clean
+            .split(Regex("\\s+"))
+            .map { it.trim().trim(',', '.', '،', ':', ';', '!', '?', '(', ')', '[', ']', '{', '}') }
+            .filter { it.isNotBlank() }
 
-        shortMonthDayRegex.find(text)?.let { match ->
+        fun normalizeToken(t: String): String =
+            t.lowercase()
+                .replace(Regex("[^\\p{L}\\p{N}]"), "")
 
-            var dayStr   = match.groupValues.getOrNull(1)?.trim()
-            var monthStr = match.groupValues.getOrNull(2)?.lowercase()?.trim()
-            var dayStr2  = match.groupValues.getOrNull(3)?.trim()
-
-            // Handle both orders
-            if (dayStr.isNullOrBlank() && !dayStr2.isNullOrBlank()) {
-                dayStr = dayStr2
-            }
-
-            if (monthStr.isNullOrBlank() || (dayStr.isNullOrBlank() && dayStr2.isNullOrBlank())) {
-                return@let
-            }
-
-            val monthNum = monthNamesEnAr[monthStr]
+        fun monthToNum(raw: String): Int? {
+            val monthStr = normalizeToken(raw)
+            return monthNamesEnAr[monthStr]
                 ?: monthNamesEnAr.entries.firstOrNull { monthStr.contains(it.key) }?.value
+        }
 
-            if (monthNum == null) return@let
+        for (i in tokens.indices) {
+            val t1 = normalizeToken(tokens[i])
 
-            val day = (dayStr ?: dayStr2)?.toIntOrNull() ?: return@let
+            // number + month
+            if (t1.toIntOrNull() != null && i + 1 < tokens.size) {
+                val day = t1.toIntOrNull() ?: continue
+                val monthNum = monthToNum(tokens[i + 1]) ?: continue
 
-            try {
-                var date = LocalDate.of(today.year, monthNum, day)
-
-                // If date is in the past → assume next year
-                if (!date.isAfter(today)) {
-                    date = date.plusYears(1)
+                try {
+                    var date = LocalDate.of(today.year, monthNum, day)
+                    if (!date.isAfter(today)) date = date.plusYears(1)
+                    return DateResult(date)
+                } catch (_: Exception) {
+                    // keep scanning
                 }
+            }
 
-                return DateResult(date)
-            } catch (_: Exception) {
-                // invalid day for month → skip
+            // month + number
+            if (monthToNum(tokens[i]) != null && i + 1 < tokens.size) {
+                val monthNum = monthToNum(tokens[i]) ?: continue
+                val day = normalizeToken(tokens[i + 1]).toIntOrNull() ?: continue
+
+                try {
+                    var date = LocalDate.of(today.year, monthNum, day)
+                    if (!date.isAfter(today)) date = date.plusYears(1)
+                    return DateResult(date)
+                } catch (_: Exception) {
+                    // keep scanning
+                }
             }
         }
+
         return null
     }
 
