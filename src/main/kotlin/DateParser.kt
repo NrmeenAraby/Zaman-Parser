@@ -7,7 +7,7 @@ data class DateResult(
     val isRecurring: Boolean = false
 )
 
-object TemporalParser {
+object DateParser {
 
     private val today: LocalDate
         get() = LocalDate.now()
@@ -241,9 +241,13 @@ object TemporalParser {
         //  use full parser instead of manual weekday logic
         val start = parse(startText)
         val end   = parse(endText)
-
         if (start != null && end != null) {
-            return DateResult(start.startDate, end.startDate)
+            var endDate = end.startDate
+
+            while (!endDate.isAfter(start.startDate)) {
+                endDate = endDate.plusWeeks(1)
+            }
+            return DateResult(start.startDate, endDate)
         }
 
         return null
